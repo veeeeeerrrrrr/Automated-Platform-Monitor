@@ -21,11 +21,19 @@ st_autorefresh(interval=5000, key="refresh")
 
 
 # -------------------------------------------------
-# CUSTOM PREMIUM CSS
+# CSS
 # -------------------------------------------------
 st.markdown("""
 <style>
 
+/* Import a premium monospace font */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
+
+html, body, [class*="css"]  {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Background */
 body {
     background-color: #0b0b0f;
     color: #f5f5f5;
@@ -35,12 +43,14 @@ body {
     background: linear-gradient(145deg, #0b0b0f, #111117);
 }
 
+/* Headings */
 h1, h2, h3 {
     color: #ffb6c1;
     font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
-/* Card styling */
+/* Card */
 .card {
     background: linear-gradient(145deg, #121218, #0e0e14);
     padding: 25px;
@@ -55,7 +65,7 @@ h1, h2, h3 {
     box-shadow: 0 0 35px rgba(255, 105, 180, 0.25);
 }
 
-/* Status dot */
+/* Status indicator */
 .status-dot {
     height: 10px;
     width: 10px;
@@ -74,6 +84,7 @@ h1, h2, h3 {
 
 /* Buttons */
 button {
+    font-family: 'JetBrains Mono', monospace !important;
     border-radius: 12px !important;
     background: linear-gradient(90deg, #ff6ec7, #ffb6c1) !important;
     color: black !important;
@@ -85,7 +96,9 @@ button:hover {
     transform: scale(1.05);
 }
 
+/* Metrics */
 [data-testid="stMetric"] {
+    font-family: 'JetBrains Mono', monospace !important;
     background: #14141b;
     padding: 15px;
     border-radius: 12px;
@@ -103,7 +116,8 @@ hr {
 # -------------------------------------------------
 # TITLE
 # -------------------------------------------------
-st.markdown("<h1>Intelligent Platform Observability Lab</h1>", unsafe_allow_html=True)
+st.markdown("<h1>Nulltrace</h1>", unsafe_allow_html=True)
+st.markdown("<h3>Nulltrace is a real-time monitoring dashboard that tracks API availability, system performance, and service health. Built to stay simple, fast, and reliable.</h3>", unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
 
@@ -223,4 +237,3 @@ st.subheader("Chaos Engineering")
 st.write("Chaos module coming soon.")
 st.button("Inject Chaos (Placeholder)")
 st.markdown("</div>", unsafe_allow_html=True)
-
