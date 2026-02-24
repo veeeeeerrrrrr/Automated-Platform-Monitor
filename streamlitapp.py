@@ -131,7 +131,12 @@ if st.button("Add API"):
 # -------------------------------------------------
 # RUN MONITORING
 # -------------------------------------------------
-api_results = asyncio.run(check_apis_async(st.session_state.api_list))
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+api_results = loop.run_until_complete(
+    check_apis_async(st.session_state.api_list)
+)
+loop.close()
 cpu, ram = check_system()
 errors, infos = analyze_logs()
 alerts = evaluate_alerts(api_results, cpu, ram)
@@ -218,3 +223,4 @@ st.subheader("Chaos Engineering")
 st.write("Chaos module coming soon.")
 st.button("Inject Chaos (Placeholder)")
 st.markdown("</div>", unsafe_allow_html=True)
+
