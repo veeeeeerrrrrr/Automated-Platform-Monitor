@@ -3,7 +3,7 @@ from config import CPU_THRESHOLD, RAM_THRESHOLD
 from logger import log_info, log_error
 
 def check_system():
-    cpu = psutil.cpu_percent()
+    cpu = psutil.cpu_percent(interval=0.5)
     ram = psutil.virtual_memory().percent
 
     if cpu > CPU_THRESHOLD:

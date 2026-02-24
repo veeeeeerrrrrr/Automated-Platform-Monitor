@@ -1,239 +1,226 @@
 import streamlit as st
 import asyncio
-import sqlite3
 import pandas as pd
-from streamlit_autorefresh import st_autorefresh
+import sqlite3
 
-from api_monitor import check_apis_async
+from api_monitor import (
+    check_apis_async,
+    calculate_sla,
+    calculate_health_score,
+    configure_chaos,
+    calculate_instability
+)
+
 from system_monitor import check_system
 from log_analyzer import analyze_logs
-from db import init_db, calculate_uptime
-from alerts import evaluate_alerts
+from db import init_db, fetch_alerts
+from streamlit_autorefresh import st_autorefresh
 
-
-# -------------------------------------------------
-# PAGE CONFIG
-# -------------------------------------------------
+# ---------------- INIT ----------------
 st.set_page_config(layout="wide")
-
 init_db()
-st_autorefresh(interval=5000, key="refresh")
 
+# Session state FIRST
+if "api_list" not in st.session_state:
+    st.session_state.api_list = []
 
-# -------------------------------------------------
-# CSS
-# -------------------------------------------------
+# Auto refresh AFTER session exists
+if st.session_state.api_list:
+    st_autorefresh(interval=5000, key="datarefresh")
+
+# ---------------- MONOSPACE UI ----------------
 st.markdown("""
 <style>
-
-/* Import a premium monospace font */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
 
-html, body, [class*="css"]  {
-    font-family: 'JetBrains Mono', monospace !important;
-}
+* { font-family: 'JetBrains Mono', monospace !important; }
 
-/* Background */
 body {
     background-color: #0b0b0f;
     color: #f5f5f5;
 }
 
-.main {
-    background: linear-gradient(145deg, #0b0b0f, #111117);
-}
+h1 { color: #ffb6c1; font-weight: 600; letter-spacing: -1px; }
+h2, h3 { color: #ffc0cb; font-weight: 500; }
 
-/* Headings */
-h1, h2, h3 {
-    color: #ffb6c1;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-}
-
-/* Card */
 .card {
-    background: linear-gradient(145deg, #121218, #0e0e14);
-    padding: 25px;
-    border-radius: 18px;
-    border: 1px solid rgba(255, 182, 193, 0.15);
-    box-shadow: 0 0 25px rgba(255, 105, 180, 0.08);
-    transition: 0.3s ease;
+    background: #111117;
+    padding: 20px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 182, 193, 0.12);
+    box-shadow: 0 0 25px rgba(255, 105, 180, 0.06);
+    margin-bottom: 20px;
 }
 
-.card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 0 35px rgba(255, 105, 180, 0.25);
-}
-
-/* Status indicator */
-.status-dot {
-    height: 10px;
-    width: 10px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-}
-
-.green {
-    background-color: #4cffb0;
-}
-
-.red {
-    background-color: #ff4c6a;
-}
-
-/* Buttons */
 button {
-    font-family: 'JetBrains Mono', monospace !important;
-    border-radius: 12px !important;
+    border-radius: 8px !important;
     background: linear-gradient(90deg, #ff6ec7, #ffb6c1) !important;
     color: black !important;
     font-weight: 600 !important;
-    transition: 0.2s ease-in-out !important;
+    transition: 0.2s ease !important;
 }
 
-button:hover {
-    transform: scale(1.05);
-}
+button:hover { transform: scale(1.04); }
 
-/* Metrics */
+.status-up { color: #5effc3; }
+.status-down { color: #ff5c75; }
+
 [data-testid="stMetric"] {
-    font-family: 'JetBrains Mono', monospace !important;
     background: #14141b;
     padding: 15px;
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid rgba(255,182,193,0.1);
 }
 
-hr {
-    border: 1px solid rgba(255,182,193,0.1);
-}
-
+hr { border: 1px solid rgba(255,182,193,0.08); }
 </style>
 """, unsafe_allow_html=True)
 
+# ---------------- TITLE ----------------
+st.title("N U L L T R A C E")
+st.write(
+    "Nulltrace is a real-time monitoring dashboard that tracks API availability, "
+    "system performance, and service health. Built to stay simple, fast, and reliable."
+)
 
-# -------------------------------------------------
-# TITLE
-# -------------------------------------------------
-st.markdown("<h1>Nulltrace</h1>", unsafe_allow_html=True)
-st.markdown("<h3>Nulltrace is a real-time monitoring dashboard that tracks API availability, system performance, and service health. Built to stay simple, fast, and reliable.</h3>", unsafe_allow_html=True)
-st.markdown("<hr>", unsafe_allow_html=True)
+st.divider()
 
-
-# -------------------------------------------------
-# SESSION STATE FOR APIS
-# -------------------------------------------------
+# ---------------- SESSION STATE ----------------
 if "api_list" not in st.session_state:
-    st.session_state.api_list = [
-        "https://api.github.com",
-        "https://jsonplaceholder.typicode.com/posts"
-    ]
+    st.session_state.api_list = []
 
-
-# -------------------------------------------------
-# ADD API INPUT
-# -------------------------------------------------
-new_api = st.text_input("Add API Endpoint")
+# ---------------- ADD API ----------------
+st.subheader("Add API Endpoint")
+new_api = st.text_input("")
 
 if st.button("Add API"):
     if new_api:
         st.session_state.api_list.append(new_api)
-        st.success("API added successfully.")
 
+st.divider()
 
-# -------------------------------------------------
-# RUN MONITORING
-# -------------------------------------------------
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
-api_results = loop.run_until_complete(
-    check_apis_async(st.session_state.api_list)
+# ---------------- CHAOS ENGINEERING ----------------
+st.markdown("<div class='card'>", unsafe_allow_html=True)
+st.subheader("Chaos Engineering")
+
+enable_chaos = st.toggle("Enable Chaos")
+
+intensity = st.slider(
+    "Chaos Intensity",
+    min_value=0.0,
+    max_value=1.0,
+    value=0.1,
+    step=0.05
 )
-loop.close()
-cpu, ram = check_system()
-errors, infos = analyze_logs()
-alerts = evaluate_alerts(api_results, cpu, ram)
 
+api_count = len(st.session_state.api_list)
 
+if api_count > 1:
+    blast_radius = st.slider(
+        "Blast Radius",
+        min_value=1,
+        max_value=api_count,
+        value=1
+    )
+else:
+    blast_radius = 1
+    st.write("Blast Radius: 1 (only one API available)")
+
+duration = st.number_input(
+    "Scheduled Duration (seconds, 0 = infinite)",
+    min_value=0,
+    value=0
+)
+
+configure_chaos(
+    enabled=enable_chaos,
+    intensity=intensity,
+    blast_radius=blast_radius,
+    duration=duration
+)
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------- RUN MONITORING ----------------
+api_results = []
+
+if st.session_state.api_list:
+    api_results = asyncio.run(
+        check_apis_async(st.session_state.api_list)
+    )
+
+# ---------------- MAIN GRID ----------------
 col1, col2 = st.columns(2)
 
-
-# -------------------------------------------------
-# API MONITORING CARD
-# -------------------------------------------------
+# -------- API MONITORING --------
 with col1:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.subheader("API Monitoring")
 
     for url, status, latency in api_results:
-        color_class = "green" if status == "UP" else "red"
+
+        sla = calculate_sla(url)
+        health = calculate_health_score(url)
+        status_class = "status-up" if status == "UP" else "status-down"
+
         st.markdown(
-            f"<span class='status-dot {color_class}'></span>"
-            f"<strong>{url}</strong> — {status} ({latency} ms)",
+            f"<p class='{status_class}'>● {url} — {status} ({latency} ms)</p>",
             unsafe_allow_html=True
         )
-        st.write(f"Uptime: {calculate_uptime(url)}%")
+
+        st.write(f"SLA: {sla}%")
+        st.write(f"Health Score: {health}/100")
+        st.write("")
+
+        # -------- LATENCY GRAPH --------
+        conn = sqlite3.connect("metrics.db")
+        df = pd.read_sql_query(
+            f"SELECT latency FROM api_metrics WHERE url='{url}' ORDER BY timestamp DESC LIMIT 50",
+            conn
+        )
+        conn.close()
+
+        if not df.empty:
+            df = df[::-1]  # reverse to chronological order
+            st.line_chart(df["latency"], height=150)
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-
-# -------------------------------------------------
-# SYSTEM CARD
-# -------------------------------------------------
+# -------- SYSTEM RESOURCES --------
 with col2:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     st.subheader("System Resources")
+
+    cpu, ram = check_system()
     st.metric("CPU Usage", f"{cpu}%")
     st.metric("RAM Usage", f"{ram}%")
+
+    instability = calculate_instability()
+    st.metric("System Instability Score", f"{instability}%")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
-
-# -------------------------------------------------
-# LOGS & ALERTS
-# -------------------------------------------------
-st.markdown("<br>", unsafe_allow_html=True)
+# ---------------- LOG ANALYSIS ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-
 st.subheader("Log Analysis")
-st.write(f"Errors: {errors}")
-st.write(f"Infos: {infos}")
 
-st.subheader("Alerts")
-if alerts:
-    for alert in alerts:
-        st.error(alert)
-else:
-    st.success("No active alerts")
+log_data = analyze_logs()
+st.write(f"Errors: {log_data['errors']}")
+st.write(f"Infos: {log_data['infos']}")
+st.write(f"Error Rate: {log_data['error_rate']}%")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-
-# -------------------------------------------------
-# LATENCY TREND
-# -------------------------------------------------
-def fetch_history():
-    conn = sqlite3.connect("metrics.db")
-    df = pd.read_sql_query("SELECT * FROM api_metrics", conn)
-    conn.close()
-    return df
-
-history_df = fetch_history()
-
-if not history_df.empty:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.subheader("Latency Trend")
-    st.line_chart(history_df["latency"])
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# -------------------------------------------------
-# CHAOS SECTION
-# -------------------------------------------------
-st.markdown("<br>", unsafe_allow_html=True)
+# ---------------- ALERTS ----------------
 st.markdown("<div class='card'>", unsafe_allow_html=True)
-st.subheader("Chaos Engineering")
-st.write("Chaos module coming soon.")
-st.button("Inject Chaos (Placeholder)")
+st.subheader("Alerts")
+
+alerts = fetch_alerts()
+
+if alerts:
+    for url, alert_type, message, timestamp in alerts[:10]:
+        st.write(f"[{timestamp}] {url} — {alert_type} — {message}")
+else:
+    st.write("No active alerts")
+
 st.markdown("</div>", unsafe_allow_html=True)
