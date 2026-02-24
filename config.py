@@ -1,0 +1,7 @@
+API_LIST = []
+    
+
+CHECK_INTERVAL = 10
+CPU_THRESHOLD = 80
+RAM_THRESHOLD = 80
+LOG_FILE = "sample.log"

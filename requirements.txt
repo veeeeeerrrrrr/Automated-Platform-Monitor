@@ -1,0 +1,6 @@
+streamlit
+aiohttp
+requests
+psutil
+pandas
+streamlit-autorefresh
